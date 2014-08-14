@@ -1,0 +1,25 @@
+name:                brainfuck
+version:             0.1.0.0
+synopsis:            A basic Brainfuck interpreter in Haskell
+description:         A basic Brainfuck interpreter in Haskell
+homepage:            http://github.com/frerich/brainfuck
+license:             BSD3
+license-file:        LICENSE
+author:              Frerich Raabe
+maintainer:          frerich.raabe@gmail.com
+copyright:           Copyright (c) 2014 Frerich Raabe <Frerich.raabe@gmail.com>
+category:            Development
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+source-repository head
+    type:       git
+    location:   http://github.com/frerich/brainfuck
+
+executable brainfuck
+  main-is:             Main.hs
+  other-extensions:    DeriveDataTypeable
+  build-depends:       base >=4.6 && <4.7, vector >=0.10 && <0.11
+  hs-source-dirs:      src
+  default-language:    Haskell2010
