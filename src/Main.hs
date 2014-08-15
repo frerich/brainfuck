@@ -28,17 +28,8 @@ data InterpreterException = AtStartOfMemory
 
 instance Exception InterpreterException
 
-writeCell :: Machine -> Int -> Machine
-writeCell m v = modify memory (replace v) m
-
-readCell :: Machine -> Int
-readCell = cursor . get memory
-
-editCell :: (Int -> Int) -> Machine -> Machine
-editCell f m = writeCell m . f . readCell $ m
-
-updateCodeIdx :: (Int -> Int) -> Machine -> Machine
-updateCodeIdx = modify codeIdx
+adjust :: (a -> a) -> Zipper a -> Zipper a
+adjust f z = replace (f . cursor $ z) z
 
 findMatchingBracket :: Char -> Char -> (Int -> Int) -> V.Vector Char -> Int -> Maybe Int
 findMatchingBracket closeCh openCh step v i
@@ -59,14 +50,16 @@ findOpeningBracket :: V.Vector Char -> Int -> Maybe Int
 findOpeningBracket v idx = findMatchingBracket '[' ']' (subtract 1) v (idx - 1)
 
 exec :: Char -> Machine -> IO Machine
-exec ch = handle ch . updateCodeIdx (+1)
+exec ch = handle ch . modify codeIdx (+1)
   where
     handle '>' m = execMemIdxShift (not . endp . get memory) AtEndOfMemory right m
     handle '<' m = execMemIdxShift (not . beginp . get memory) AtStartOfMemory left m
-    handle '+' m = return (editCell (+1) m)
-    handle '-' m = return (editCell (subtract 1) m)
-    handle '.' m = putChar (chr (readCell m)) >> return m
-    handle ',' m = getChar >>= return . writeCell m . ord
+    handle '+' m = return (modify memory (adjust (+1)) m)
+    handle '-' m = return (modify memory (adjust (subtract 1)) m)
+    handle '.' m = putChar (chr . cursor . get memory $ m) >> return m
+    handle ',' m = do
+        ch <- getChar
+        return (modify memory (replace . ord $ ch) m)
     handle '[' m = execJump (== 0) findClosingBracket NoLoopEnd m
     handle ']' m = execJump (/= 0) findOpeningBracket NoLoopStart m
     handle _   m = return m
@@ -76,7 +69,7 @@ exec ch = handle ch . updateCodeIdx (+1)
         | otherwise = throwIO errorType
 
     execJump jumpCond locator errorType m = 
-        if not (jumpCond (readCell m)) then return m else
+        if not . jumpCond . cursor . get memory $ m then return m else
             case locator (get code m) (get codeIdx m - 1) of
                 Just pos -> return (set codeIdx (pos + 1) m)
                 Nothing  -> throwIO errorType
