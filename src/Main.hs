@@ -66,27 +66,16 @@ exec ch = handle ch . updateCodeIdx (+1)
     handle '-' m = editCell (subtract 1) m
     handle '.' m = chr <$> readCell m >>= putChar >> return m
     handle ',' m = ord <$> getChar >>= writeCell m >> return m
-    handle '[' m@(Machine code codeIdx mem memIdx) = do
-        cell <- readCell m
-        if cell == 0
-            then jump
-            else return m
-      where
-        jump =
-            case findClosingBracket code (codeIdx - 1) of
-                Just codeIdx' -> return (Machine code (codeIdx' + 1) mem memIdx)
-                Nothing -> throwIO NoLoopEnd
-    handle ']' m@(Machine code codeIdx mem memIdx) = do
-        cell <- readCell m
-        if cell /= 0
-            then jump
-            else return m
-      where
-        jump =
-            case findOpeningBracket code (codeIdx - 1) of
-                Just codeIdx' -> return (Machine code (codeIdx' + 1) mem memIdx)
-                Nothing -> throwIO NoLoopStart
+    handle '[' m = execJump (== 0) findClosingBracket NoLoopEnd m
+    handle ']' m = execJump (/= 0) findOpeningBracket NoLoopStart m
     handle _   m = return m
+
+    execJump jumpCond locator errorType m@(Machine code codeIdx mem memIdx) = do
+        cell <- readCell m
+        if not (jumpCond cell) then return m else
+            case locator code (codeIdx - 1) of
+                Just matchingBracketPos -> return (Machine code (matchingBracketPos + 1) mem memIdx)
+                Nothing                 -> throwIO errorType
 
 boot :: Int -> String -> IO Machine
 boot memSize program = do
