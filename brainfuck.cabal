@@ -1,5 +1,5 @@
 name:                brainfuck
-version:             0.1.0.0
+version:             0.2.0.0
 synopsis:            A basic Brainfuck interpreter in Haskell
 description:         A basic Brainfuck interpreter in Haskell
 homepage:            http://github.com/frerich/brainfuck
