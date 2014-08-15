@@ -78,9 +78,9 @@ exec ch = handle ch . updateCodeIdx (+1)
                 Nothing -> throwIO NoLoopEnd
     handle ']' m@(Machine code codeIdx mem memIdx) = do
         cell <- readCell m
-        if cell == 0
-            then return m
-            else restartLoop
+        if cell /= 0
+            then restartLoop
+            else return m
       where
         restartLoop =
             case findOpeningBracket code (codeIdx - 1) of
