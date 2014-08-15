@@ -100,8 +100,11 @@ run m@(Machine code codePtr _ _) =
 
 main :: IO ()
 main = do
-    [fileName] <- getArgs
-    machine <- readFile fileName >>= boot 1024
+    args <- getArgs
+    program <- case args of
+                    [] -> getContents
+                    (fn:_) -> readFile fn
+    machine <- boot 1024 program
     catch (run machine) $ \e -> do
         putStr "... -- ERROR! "
         case e of
