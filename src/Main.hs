@@ -104,7 +104,7 @@ main = do
     program <- case args of
                     [] -> getContents
                     (fn:_) -> readFile fn
-    machine <- boot 1024 program
+    machine <- boot 65536 program
     catch (run machine) $ \e -> do
         putStr "... -- ERROR! "
         case e of
