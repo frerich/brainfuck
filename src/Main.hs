@@ -48,10 +48,10 @@ findMatchingBracket closeCh openCh step v i
     | otherwise = Nothing
 
 findClosingBracket :: V.Vector Char -> Int -> Maybe Int
-findClosingBracket = findMatchingBracket ']' '[' (+1)
+findClosingBracket v idx = findMatchingBracket ']' '[' (+1) v (idx + 1)
 
 findOpeningBracket :: V.Vector Char -> Int -> Maybe Int
-findOpeningBracket = findMatchingBracket '[' ']' (subtract 1)
+findOpeningBracket v idx = findMatchingBracket '[' ']' (subtract 1) v (idx - 1)
 
 exec :: Char -> Machine -> IO Machine
 exec ch = handle ch . updateCodeIdx (+1)
@@ -73,7 +73,7 @@ exec ch = handle ch . updateCodeIdx (+1)
             else return m
       where
         exitLoop =
-            case findClosingBracket code codeIdx of
+            case findClosingBracket code (codeIdx - 1) of
                 Just codeIdx' -> return (Machine code (codeIdx' + 1) mem memIdx)
                 Nothing -> throwIO NoLoopEnd
     handle ']' m@(Machine code codeIdx mem memIdx) = do
@@ -83,7 +83,7 @@ exec ch = handle ch . updateCodeIdx (+1)
             else restartLoop
       where
         restartLoop =
-            case findOpeningBracket code (codeIdx - 2) of
+            case findOpeningBracket code (codeIdx - 1) of
                 Just codeIdx' -> return (Machine code (codeIdx' + 1) mem memIdx)
                 Nothing -> throwIO NoLoopStart
     handle _   m = return m
