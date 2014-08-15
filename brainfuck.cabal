@@ -20,6 +20,6 @@ source-repository head
 executable brainfuck
   main-is:             Main.hs
   other-extensions:    DeriveDataTypeable
-  build-depends:       base >=4.6 && <4.7, vector >=0.10 && <0.11
+  build-depends:       base >=4.6 && <4.7, vector >=0.10 && <0.11, ListZipper
   hs-source-dirs:      src
   default-language:    Haskell2010

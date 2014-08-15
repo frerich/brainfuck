@@ -1,16 +1,16 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 
 import qualified Data.Vector as V
-import qualified Data.Vector.Mutable as MV
 import Control.Exception (throwIO, Exception, catch)
 import Control.Monad (unless)
 import Data.Functor ((<$>))
 import Data.Char (ord, chr)
 import Data.Typeable (Typeable)
+import Data.List.Zipper
 import System.Exit (exitFailure)
 import System.Environment (getArgs)
 
-data Machine = Machine (V.Vector Char) Int (MV.IOVector Int) Int
+data Machine = Machine (V.Vector Char) Int (Zipper Int)
 
 data InterpreterException = AtStartOfMemory
                           | AtEndOfMemory
@@ -20,17 +20,17 @@ data InterpreterException = AtStartOfMemory
 
 instance Exception InterpreterException
 
-writeCell :: Machine -> Int -> IO ()
-writeCell (Machine _ _ mem ptr) = MV.write mem ptr
+writeCell :: Machine -> Int -> Machine
+writeCell (Machine code codeIdx mem) v = Machine code codeIdx (replace v mem)
 
-readCell :: Machine -> IO Int
-readCell (Machine _ _ mem ptr) = MV.read mem ptr
+readCell :: Machine -> Int
+readCell (Machine _ _ mem) = cursor mem
 
-editCell :: (Int -> Int) -> Machine -> IO Machine
-editCell f m = f <$> readCell m >>= writeCell m >> return m
+editCell :: (Int -> Int) -> Machine -> Machine
+editCell f m = writeCell m (f (readCell m))
 
 updateCodeIdx :: (Int -> Int) -> Machine -> Machine
-updateCodeIdx f (Machine code codeIdx mem memIdx) = Machine code (f codeIdx) mem memIdx
+updateCodeIdx f (Machine code codeIdx mem) = Machine code (f codeIdx) mem
 
 findMatchingBracket :: Char -> Char -> (Int -> Int) -> V.Vector Char -> Int -> Maybe Int
 findMatchingBracket closeCh openCh step v i
@@ -53,34 +53,32 @@ findOpeningBracket v idx = findMatchingBracket '[' ']' (subtract 1) v (idx - 1)
 exec :: Char -> Machine -> IO Machine
 exec ch = handle ch . updateCodeIdx (+1)
   where
-    handle '>' m = execMemIdxShift (\m@(Machine _ _ mem memIdx) -> memIdx < MV.length mem) AtEndOfMemory (+1) m
-    handle '<' m = execMemIdxShift (\m@(Machine _ _ _ memIdx) -> memIdx > 0) AtStartOfMemory (subtract 1) m
-    handle '+' m = editCell (+1) m
-    handle '-' m = editCell (subtract 1) m
-    handle '.' m = chr <$> readCell m >>= putChar >> return m
-    handle ',' m = ord <$> getChar >>= writeCell m >> return m
+    handle '>' m = execMemIdxShift (\m@(Machine _ _ mem) -> not (endp mem)) AtEndOfMemory right m
+    handle '<' m = execMemIdxShift (\m@(Machine _ _ mem) -> not (beginp mem)) AtStartOfMemory left m
+    handle '+' m = return (editCell (+1) m)
+    handle '-' m = return (editCell (subtract 1) m)
+    handle '.' m = putChar (chr (readCell m)) >> return m
+    handle ',' m = getChar >>= return . writeCell m . ord
     handle '[' m = execJump (== 0) findClosingBracket NoLoopEnd m
     handle ']' m = execJump (/= 0) findOpeningBracket NoLoopStart m
     handle _   m = return m
 
-    execMemIdxShift p errorType adjust m@(Machine code codeIdx mem memIdx)
-        | p m       = return (Machine code codeIdx mem (adjust memIdx))
+    execMemIdxShift p errorType adjust m@(Machine code codeIdx mem)
+        | p m       = return (Machine code codeIdx (adjust mem))
         | otherwise = throwIO errorType
 
-    execJump jumpCond locator errorType m@(Machine code codeIdx mem memIdx) = do
-        cell <- readCell m
-        if not (jumpCond cell) then return m else
+    execJump jumpCond locator errorType m@(Machine code codeIdx mem) =
+        if not (jumpCond (readCell m)) then return m else
             case locator code (codeIdx - 1) of
-                Just matchingBracketPos -> return (Machine code (matchingBracketPos + 1) mem memIdx)
+                Just matchingBracketPos -> return (Machine code (matchingBracketPos + 1) mem)
                 Nothing                 -> throwIO errorType
 
-boot :: Int -> String -> IO Machine
-boot memSize program = do
-    mem <- MV.replicate memSize 0
-    return (Machine (V.fromList program) 0 mem 0)
+boot :: Int -> String -> Machine
+boot memSize program =
+    Machine (V.fromList program) 0 (fromList (replicate memSize 0))
 
 run :: Machine -> IO ()
-run m@(Machine code codePtr _ _) =
+run m@(Machine code codePtr _) =
     unless (codePtr >= V.length code) $
         exec (code V.! codePtr) m >>= run
 
@@ -90,7 +88,7 @@ main = do
     program <- case args of
                     [] -> getContents
                     (fn:_) -> readFile fn
-    machine <- boot 65536 program
+    let machine = boot 65536 program
     catch (run machine) $ \e -> do
         putStr "... -- ERROR! "
         case e of
