@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 import qualified Data.Vector as V
 import Control.Exception (throwIO, Exception, catch)
@@ -6,11 +7,18 @@ import Control.Monad (unless)
 import Data.Functor ((<$>))
 import Data.Char (ord, chr)
 import Data.Typeable (Typeable)
+import Data.Label (mkLabels, get, set, modify)
 import Data.List.Zipper
 import System.Exit (exitFailure)
 import System.Environment (getArgs)
 
-data Machine = Machine (V.Vector Char) Int (Zipper Int)
+data Machine = Machine
+    { _code :: V.Vector Char
+    , _codeIdx :: Int
+    , _memory :: Zipper Int
+    }
+
+mkLabels [''Machine]
 
 data InterpreterException = AtStartOfMemory
                           | AtEndOfMemory
@@ -21,16 +29,16 @@ data InterpreterException = AtStartOfMemory
 instance Exception InterpreterException
 
 writeCell :: Machine -> Int -> Machine
-writeCell (Machine code codeIdx mem) v = Machine code codeIdx (replace v mem)
+writeCell m v = modify memory (replace v) m
 
 readCell :: Machine -> Int
-readCell (Machine _ _ mem) = cursor mem
+readCell = cursor . get memory
 
 editCell :: (Int -> Int) -> Machine -> Machine
-editCell f m = writeCell m (f (readCell m))
+editCell f m = writeCell m . f . readCell $ m
 
 updateCodeIdx :: (Int -> Int) -> Machine -> Machine
-updateCodeIdx f (Machine code codeIdx mem) = Machine code (f codeIdx) mem
+updateCodeIdx = modify codeIdx
 
 findMatchingBracket :: Char -> Char -> (Int -> Int) -> V.Vector Char -> Int -> Maybe Int
 findMatchingBracket closeCh openCh step v i
@@ -53,8 +61,8 @@ findOpeningBracket v idx = findMatchingBracket '[' ']' (subtract 1) v (idx - 1)
 exec :: Char -> Machine -> IO Machine
 exec ch = handle ch . updateCodeIdx (+1)
   where
-    handle '>' m = execMemIdxShift (\m@(Machine _ _ mem) -> not (endp mem)) AtEndOfMemory right m
-    handle '<' m = execMemIdxShift (\m@(Machine _ _ mem) -> not (beginp mem)) AtStartOfMemory left m
+    handle '>' m = execMemIdxShift (not . endp . get memory) AtEndOfMemory right m
+    handle '<' m = execMemIdxShift (not . beginp . get memory) AtStartOfMemory left m
     handle '+' m = return (editCell (+1) m)
     handle '-' m = return (editCell (subtract 1) m)
     handle '.' m = putChar (chr (readCell m)) >> return m
@@ -63,24 +71,25 @@ exec ch = handle ch . updateCodeIdx (+1)
     handle ']' m = execJump (/= 0) findOpeningBracket NoLoopStart m
     handle _   m = return m
 
-    execMemIdxShift p errorType adjust m@(Machine code codeIdx mem)
-        | p m       = return (Machine code codeIdx (adjust mem))
+    execMemIdxShift p errorType adjust m
+        | p m       = return (modify memory adjust m)
         | otherwise = throwIO errorType
 
-    execJump jumpCond locator errorType m@(Machine code codeIdx mem) =
+    execJump jumpCond locator errorType m = 
         if not (jumpCond (readCell m)) then return m else
-            case locator code (codeIdx - 1) of
-                Just matchingBracketPos -> return (Machine code (matchingBracketPos + 1) mem)
-                Nothing                 -> throwIO errorType
+            case locator (get code m) (get codeIdx m - 1) of
+                Just pos -> return (set codeIdx (pos + 1) m)
+                Nothing  -> throwIO errorType
 
 boot :: Int -> String -> Machine
 boot memSize program =
     Machine (V.fromList program) 0 (fromList (replicate memSize 0))
 
 run :: Machine -> IO ()
-run m@(Machine code codePtr _) =
-    unless (codePtr >= V.length code) $
-        exec (code V.! codePtr) m >>= run
+run m = unless (i >= V.length c) (exec (c V.! i) m >>= run)
+  where
+    c = get code m
+    i = get codeIdx m
 
 main :: IO ()
 main = do
