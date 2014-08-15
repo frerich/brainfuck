@@ -29,9 +29,6 @@ readCell (Machine _ _ mem ptr) = MV.read mem ptr
 editCell :: (Int -> Int) -> Machine -> IO Machine
 editCell f m = f <$> readCell m >>= writeCell m >> return m
 
-editCellIdx :: (Int -> Int) -> Machine -> Machine
-editCellIdx f (Machine code codeIdx mem memIdx) = Machine code codeIdx mem (f memIdx)
-
 updateCodeIdx :: (Int -> Int) -> Machine -> Machine
 updateCodeIdx f (Machine code codeIdx mem memIdx) = Machine code (f codeIdx) mem memIdx
 
@@ -56,12 +53,8 @@ findOpeningBracket v idx = findMatchingBracket '[' ']' (subtract 1) v (idx - 1)
 exec :: Char -> Machine -> IO Machine
 exec ch = handle ch . updateCodeIdx (+1)
   where
-    handle '>' m@(Machine _ _ mem memIdx)
-        | memIdx < MV.length mem = return (editCellIdx (+1) m)
-        | otherwise              = throwIO AtEndOfMemory
-    handle '<' m@(Machine _ _ _ memIdx)
-        | memIdx > 0 = return (editCellIdx (subtract 1) m)
-        | otherwise  = throwIO AtStartOfMemory
+    handle '>' m = execMemIdxShift (\m@(Machine _ _ mem memIdx) -> memIdx < MV.length mem) AtEndOfMemory (+1) m
+    handle '<' m = execMemIdxShift (\m@(Machine _ _ _ memIdx) -> memIdx > 0) AtStartOfMemory (subtract 1) m
     handle '+' m = editCell (+1) m
     handle '-' m = editCell (subtract 1) m
     handle '.' m = chr <$> readCell m >>= putChar >> return m
@@ -69,6 +62,10 @@ exec ch = handle ch . updateCodeIdx (+1)
     handle '[' m = execJump (== 0) findClosingBracket NoLoopEnd m
     handle ']' m = execJump (/= 0) findOpeningBracket NoLoopStart m
     handle _   m = return m
+
+    execMemIdxShift p errorType adjust m@(Machine code codeIdx mem memIdx)
+        | p m       = return (Machine code codeIdx mem (adjust memIdx))
+        | otherwise = throwIO errorType
 
     execJump jumpCond locator errorType m@(Machine code codeIdx mem memIdx) = do
         cell <- readCell m
