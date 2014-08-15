@@ -69,20 +69,20 @@ exec ch = handle ch . updateCodeIdx (+1)
     handle '[' m@(Machine code codeIdx mem memIdx) = do
         cell <- readCell m
         if cell == 0
-            then exitLoop
+            then jump
             else return m
       where
-        exitLoop =
+        jump =
             case findClosingBracket code (codeIdx - 1) of
                 Just codeIdx' -> return (Machine code (codeIdx' + 1) mem memIdx)
                 Nothing -> throwIO NoLoopEnd
     handle ']' m@(Machine code codeIdx mem memIdx) = do
         cell <- readCell m
         if cell /= 0
-            then restartLoop
+            then jump
             else return m
       where
-        restartLoop =
+        jump =
             case findOpeningBracket code (codeIdx - 1) of
                 Just codeIdx' -> return (Machine code (codeIdx' + 1) mem memIdx)
                 Nothing -> throwIO NoLoopStart
