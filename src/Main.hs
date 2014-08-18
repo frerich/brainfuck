@@ -58,14 +58,14 @@ exec ch = handle ch . modify codeIdx (+1)
     handle '-' m = return (modify memory (adjust (subtract 1)) m)
     handle '.' m = putChar (chr . cursor . get memory $ m) >> return m
     handle ',' m = do
-        ch <- getChar
-        return (modify memory (replace . ord $ ch) m)
+        c <- getChar
+        return (modify memory (replace . ord $ c) m)
     handle '[' m = execJump (== 0) findClosingBracket NoLoopEnd m
     handle ']' m = execJump (/= 0) findOpeningBracket NoLoopStart m
     handle _   m = return m
 
-    execMemIdxShift p errorType adjust m
-        | p m       = return (modify memory adjust m)
+    execMemIdxShift p errorType idxAdjustment m
+        | p m       = return (modify memory idxAdjustment m)
         | otherwise = throwIO errorType
 
     execJump jumpCond locator errorType m = 
