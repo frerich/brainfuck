@@ -1,12 +1,13 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TemplateHaskell #-}
 
+import qualified Data.Vector.Mutable as MV
 import Control.Exception (throwIO, Exception, catch)
 import Control.Monad (foldM, void)
 import Data.Char (ord, chr)
+import Data.Functor ((<$>))
 import Data.Typeable (Typeable)
 import Data.Label (mkLabels, get, modify)
-import Data.List.Zipper
 import System.Exit (exitFailure)
 import System.Environment (getArgs)
 import System.IO (hSetBuffering, stdout, BufferMode(NoBuffering))
@@ -19,6 +20,8 @@ data Instruction
     | Loop Program
     deriving (Show)
 
+type Program = [Instruction]
+
 data InterpreterException
     = AtStartOfMemory
     | AtEndOfMemory
@@ -26,16 +29,18 @@ data InterpreterException
 
 instance Exception InterpreterException
 
-type Program = [Instruction]
+data Machine = Machine
+    { _memoryIdx :: Int
+    , _memory :: MV.IOVector Int
+    }
 
-data Machine = Machine { _memory :: Zipper Int }
 mkLabels [''Machine]
 
-compose :: [a -> a] -> a -> a
-compose = foldr (.) id
+getCell :: Machine -> IO Int
+getCell m = MV.read (get memory m) (get memoryIdx m)
 
-adjust :: (a -> a) -> Zipper a -> Zipper a
-adjust f z = replace (f . cursor $ z) z
+setCell:: Machine -> Int -> IO ()
+setCell m = MV.write (get memory m) (get memoryIdx m)
 
 compile :: String -> Either String Program
 compile = go [] []
@@ -59,28 +64,23 @@ compile = go [] []
       where
         (as, bs) = span (`elem` [inc, dec]) str
 
-distLeft :: Zipper a -> Int
-distLeft (Zip l _) = length l
-
-distRight :: Zipper a -> Int
-distRight (Zip _ r) = length r
-
 exec :: Machine -> Instruction -> IO Machine
 exec machine i = handle i machine
   where
     handle (AdjustCellPtr v) m
-        | v > 0 = if distRight (get memory m) >= v
-                    then return (modify memory (compose (replicate v right)) m)
+        | v > 0 = if get memoryIdx m + v < MV.length (get memory m)
+                    then return (modify memoryIdx (+v) m)
                     else throwIO AtEndOfMemory
-        | v < 0 = if distLeft (get memory m) >= (-v)
-                    then return (modify memory (compose (replicate (-v) left)) m)
+        | v < 0 = if get memoryIdx m + v >= 0
+                    then return (modify memoryIdx (+v) m)
                     else throwIO AtStartOfMemory
         | otherwise = return m
-    handle (AdjustCell v) m = return (modify memory (adjust (+v)) m)
-    handle PutChar m = putChar (chr . cursor . get memory $ m) >> return m
-    handle GetChar m = getChar >>= \c -> return (modify memory (replace . ord $ c) m)
-    handle l@(Loop p) m =
-        if cursor (get memory m) /= 0
+    handle (AdjustCell v) m = getCell m >>= setCell m . (+v) >> return m
+    handle PutChar m = getCell m >>= putChar . chr >> return m
+    handle GetChar m = getChar >>= setCell m . ord >> return m
+    handle l@(Loop p) m = do
+        curVal <- getCell m
+        if curVal /= 0
             then run m p >>= handle l
             else return m
 
@@ -90,7 +90,7 @@ run = foldM exec
 boot :: Int -> Program -> IO ()
 boot memSize program = do
     hSetBuffering stdout NoBuffering
-    let m = Machine (fromList (replicate memSize 0))
+    m <- Machine 0 <$> MV.replicate memSize 0
     catch (void (run m program)) $ \e -> do
         putStr "... ERROR! "
         case e of
