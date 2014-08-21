@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-import Control.Exception (throwIO, Exception, catch)
+import Control.Exception (throw, Exception, catch)
 import Control.Monad (foldM, void)
 import Data.Char (ord, chr)
 import Data.Typeable (Typeable)
@@ -34,6 +34,9 @@ mkLabels [''Machine]
 compose :: [a -> a] -> a -> a
 compose = foldr (.) id
 
+apN :: Int -> (a -> a) -> a -> a
+apN n = compose . replicate n
+
 adjust :: (a -> a) -> Zipper a -> Zipper a
 adjust f z = replace (f . cursor $ z) z
 
@@ -59,22 +62,12 @@ compile = go [] []
       where
         (as, bs) = span (`elem` [inc, dec]) str
 
-distLeft :: Zipper a -> Int
-distLeft (Zip l _) = length l
-
-distRight :: Zipper a -> Int
-distRight (Zip _ r) = length r
-
 exec :: Machine -> Instruction -> IO Machine
 exec machine i = handle i machine
   where
     handle (AdjustCellPtr v) m
-        | v > 0 = if distRight (get memory m) >= v
-                    then return (modify memory (compose (replicate v right)) m)
-                    else throwIO AtEndOfMemory
-        | v < 0 = if distLeft (get memory m) >= (-v)
-                    then return (modify memory (compose (replicate (-v) left)) m)
-                    else throwIO AtStartOfMemory
+        | v > 0 = return (modify memory (apN v    (\z -> if endp z then throw AtEndOfMemory else right z)) m)
+        | v < 0 = return (modify memory (apN (-v) (\z -> if beginp z then throw AtStartOfMemory else left z)) m)
         | otherwise = return m
     handle (AdjustCell v) m = return (modify memory (adjust (+v)) m)
     handle PutChar m = putChar (chr . cursor . get memory $ m) >> return m
