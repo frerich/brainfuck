@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 import qualified Data.Vector.Mutable as MV
 import Control.Exception (throwIO, Exception, catch)
@@ -7,7 +6,6 @@ import Control.Monad (foldM, void)
 import Data.Char (ord, chr)
 import Data.Functor ((<$>))
 import Data.Typeable (Typeable)
-import Data.Label (mkLabels, get, modify)
 import System.Exit (exitFailure)
 import System.Environment (getArgs)
 import System.IO (hSetBuffering, stdout, BufferMode(NoBuffering))
@@ -29,18 +27,13 @@ data InterpreterException
 
 instance Exception InterpreterException
 
-data Machine = Machine
-    { _memoryIdx :: Int
-    , _memory :: MV.IOVector Int
-    }
-
-mkLabels [''Machine]
+data Machine = Machine Int (MV.IOVector Int)
 
 getCell :: Machine -> IO Int
-getCell m = MV.read (get memory m) (get memoryIdx m)
+getCell (Machine idx mem) = MV.read mem idx
 
 setCell:: Machine -> Int -> IO ()
-setCell m = MV.write (get memory m) (get memoryIdx m)
+setCell (Machine idx mem) = MV.write mem idx
 
 compile :: String -> Either String Program
 compile = go [] []
@@ -65,12 +58,12 @@ compile = go [] []
         (as, bs) = span (`elem` [inc, dec]) str
 
 exec :: Machine -> Instruction -> IO Machine
-exec m (AdjustCellPtr v)
-    | v > 0 = if get memoryIdx m + v < MV.length (get memory m)
-                then return (modify memoryIdx (+v) m)
+exec m@(Machine idx mem) (AdjustCellPtr v)
+    | v > 0 = if idx + v < MV.length mem
+                then return (Machine (idx + v) mem)
                 else throwIO AtEndOfMemory
-    | v < 0 = if get memoryIdx m + v >= 0
-                then return (modify memoryIdx (+v) m)
+    | v < 0 = if idx + v >= 0
+                then return (Machine (idx + v) mem)
                 else throwIO AtStartOfMemory
     | otherwise = return m
 exec m (AdjustCell v) = getCell m >>= setCell m . (+v) >> return m
