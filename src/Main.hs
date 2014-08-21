@@ -65,24 +65,22 @@ compile = go [] []
         (as, bs) = span (`elem` [inc, dec]) str
 
 exec :: Machine -> Instruction -> IO Machine
-exec machine i = handle i machine
-  where
-    handle (AdjustCellPtr v) m
-        | v > 0 = if get memoryIdx m + v < MV.length (get memory m)
-                    then return (modify memoryIdx (+v) m)
-                    else throwIO AtEndOfMemory
-        | v < 0 = if get memoryIdx m + v >= 0
-                    then return (modify memoryIdx (+v) m)
-                    else throwIO AtStartOfMemory
-        | otherwise = return m
-    handle (AdjustCell v) m = getCell m >>= setCell m . (+v) >> return m
-    handle PutChar m = getCell m >>= putChar . chr >> return m
-    handle GetChar m = getChar >>= setCell m . ord >> return m
-    handle l@(Loop p) m = do
-        curVal <- getCell m
-        if curVal /= 0
-            then run m p >>= handle l
-            else return m
+exec m (AdjustCellPtr v)
+    | v > 0 = if get memoryIdx m + v < MV.length (get memory m)
+                then return (modify memoryIdx (+v) m)
+                else throwIO AtEndOfMemory
+    | v < 0 = if get memoryIdx m + v >= 0
+                then return (modify memoryIdx (+v) m)
+                else throwIO AtStartOfMemory
+    | otherwise = return m
+exec m (AdjustCell v) = getCell m >>= setCell m . (+v) >> return m
+exec m PutChar = getCell m >>= putChar . chr >> return m
+exec m GetChar = getChar >>= setCell m . ord >> return m
+exec m l@(Loop p) = do
+    curVal <- getCell m
+    if curVal /= 0
+        then run m p >>= \m' -> exec m' l
+        else return m
 
 run :: Machine -> Program -> IO Machine
 run = foldM exec
