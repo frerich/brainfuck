@@ -6,17 +6,17 @@ module Data.Language.Brainfuck
     , run
 
     , Program
-    , Machine
+    , Machine()
+    , InterpreterException(..)
     )
 where
 
 import qualified Data.Vector.Mutable as MV
-import Control.Exception (throwIO, Exception, catch)
-import Control.Monad (foldM, void)
+import Control.Exception (throwIO, Exception)
+import Control.Monad (foldM)
 import Data.Char (ord, chr)
 import Data.Functor ((<$>))
 import Data.Typeable (Typeable)
-import System.Exit (exitFailure)
 
 data Instruction
     = AdjustCell Int
@@ -86,14 +86,6 @@ exec m l@(Loop p) = do
 run :: Machine -> Program -> IO Machine
 run = foldM exec
 
-boot :: Int -> Program -> IO ()
-boot memSize program = do
-    m <- Machine 0 <$> MV.replicate memSize 0
-    catch (void (run m program)) $ \e -> do
-        putStr "... ERROR! "
-        case e of
-            AtStartOfMemory -> putStrLn "Cannot move left: already at start of memory."
-            AtEndOfMemory -> putStrLn "Cannot move right: already at end of memory."
-        exitFailure
-    return ()
+boot :: Int -> IO Machine
+boot memSize = Machine 0 <$> MV.replicate memSize 0
 
