@@ -1,3 +1,5 @@
+{-# LANGUAGE LambdaCase #-}
+
 import Data.Language.Brainfuck
 
 import Control.Exception (catch)
@@ -18,10 +20,9 @@ execute program = do
 
 main :: IO ()
 main = do
-    args <- getArgs
-    code <- case args of
-            [] -> getContents
-            (fn:_) -> readFile fn
+    code <- getArgs >>= \case
+                [] -> getContents
+                (fn:_) -> readFile fn
     case compile code of
         Left errorMsg -> putStr errorMsg >> exitFailure
         Right program -> execute program
