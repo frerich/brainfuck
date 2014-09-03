@@ -43,13 +43,15 @@ getCell (Machine idx mem) = MV.read mem idx
 setCell:: Machine -> Int -> IO ()
 setCell (Machine idx mem) = MV.write mem idx
 
-compile :: String -> Either String Program
-compile = go [] []
+parse :: String -> Either String Program
+parse = go [] []
   where
     go :: [Instruction] -> [[Instruction]] -> String -> Either String Program
-    go p stack s@(x:xs)
-        | x `elem` "+-" = let (v, rest) = compileSpan '+' '-' s in go (AdjustCell v : p) stack rest
-        | x `elem` "><" = let (v, rest) = compileSpan '>' '<' s in go (AdjustCellPtr v : p) stack rest
+    go p stack (x:xs)
+        | x == '+' = go (AdjustCell 1 : p) stack xs
+        | x == '-' = go (AdjustCell (-1) : p) stack xs
+        | x == '>' = go (AdjustCellPtr 1 : p) stack xs
+        | x == '<' = go (AdjustCellPtr (-1) : p) stack xs
         | x == '.'  = go (PutChar : p) stack xs
         | x == ','  = go (GetChar : p) stack xs
         | x == '['  = go [] (p:stack) xs
@@ -60,10 +62,15 @@ compile = go [] []
     go p [] [] = Right (reverse p)
     go _ _  [] = Left "unexpected EOI, ']' missing"
 
-    compileSpan :: Char -> Char -> String -> (Int, String)
-    compileSpan inc dec str = (sum (map (\x -> if x == inc then 1 else (-1)) as), bs)
-      where
-        (as, bs) = span (`elem` [inc, dec]) str
+merge :: Program -> Program
+merge (AdjustCell x:AdjustCell y:rest)       = merge (AdjustCell (x+y) : rest)
+merge (AdjustCellPtr x:AdjustCellPtr y:rest) = merge (AdjustCellPtr (x+y) : rest)
+merge (Loop p:rest)                          = Loop (merge p) : merge rest
+merge (x:xs)                                 = x : merge xs
+merge []                                     = []
+
+compile :: String -> Either String Program
+compile = either Left (Right . merge) . parse
 
 exec :: Machine -> Instruction -> IO Machine
 exec m@(Machine idx mem) (AdjustCellPtr v)
