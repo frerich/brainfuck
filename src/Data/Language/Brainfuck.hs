@@ -44,23 +44,23 @@ setCell:: Machine -> Int -> IO ()
 setCell (Machine idx mem) = MV.write mem idx
 
 parse :: String -> Either String Program
-parse = go [] []
+parse s = case go [] (s ++ "]") of
+            Left msg        -> Left msg
+            Right (p, [])   -> Right (reverse p)
+            Right (_, rest) -> Left ("unexpected input: " ++ rest)
   where
-    go :: [Instruction] -> [[Instruction]] -> String -> Either String Program
-    go p stack (x:xs)
-        | x == '+' = go (AdjustCell 1 : p) stack xs
-        | x == '-' = go (AdjustCell (-1) : p) stack xs
-        | x == '>' = go (AdjustCellPtr 1 : p) stack xs
-        | x == '<' = go (AdjustCellPtr (-1) : p) stack xs
-        | x == '.'  = go (PutChar : p) stack xs
-        | x == ','  = go (GetChar : p) stack xs
-        | x == '['  = go [] (p:stack) xs
-        | x == ']'  = case stack of
-                        (a:as) -> go (Loop (reverse p) : a) as xs
-                        _      -> Left "unexpected ']'"
-        | otherwise = go p stack xs
-    go p [] [] = Right (reverse p)
-    go _ _  [] = Left "unexpected EOI, ']' missing"
+    go p ('+':xs) = go (AdjustCell 1 : p) xs
+    go p ('-':xs) = go (AdjustCell (-1) : p) xs
+    go p ('>':xs) = go (AdjustCellPtr 1 : p) xs
+    go p ('<':xs) = go (AdjustCellPtr (-1) : p) xs
+    go p ('.':xs) = go (PutChar : p) xs
+    go p (',':xs) = go (GetChar : p) xs
+    go p ('[':xs) = case go [] xs of
+                        Left msg -> Left msg
+                        Right (p', rest) -> go (Loop (reverse p') : p) rest
+    go p (']':xs) = Right (p, xs)
+    go p (_  :xs) = go p xs
+    go _ []       = Left "missing ']'"
 
 merge :: Program -> Program
 merge (AdjustCell x:AdjustCell y:rest)       = merge (AdjustCell (x+y) : rest)
