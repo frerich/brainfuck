@@ -87,8 +87,19 @@ zeroCells (Loop p:rest) = Loop (zeroCells p) : zeroCells rest
 zeroCells (x:xs)        = x : zeroCells xs
 zeroCells []            = []
 
+fuseAssignAndAdjust :: Program -> Program
+fuseAssignAndAdjust (SetCell x:AdjustCell y:rest) = fuseAssignAndAdjust (SetCell (x+y) : rest)
+fuseAssignAndAdjust (Loop p:rest)                 = Loop (fuseAssignAndAdjust p) : fuseAssignAndAdjust rest
+fuseAssignAndAdjust (x:xs)                        = x : fuseAssignAndAdjust xs
+fuseAssignAndAdjust []                            = []
+
 compile :: String -> Either String Program
-compile = either Left (Right . collapse . zeroCells . merge) . parse
+compile = either Left (Right . optimize) . parse
+  where
+    optimize = collapse
+             . fuseAssignAndAdjust
+             . zeroCells
+             . merge
 
 exec :: Machine -> Instruction -> IO Machine
 exec m@(Machine idx mem) (AdjustCellPtr v)
