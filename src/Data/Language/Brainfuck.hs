@@ -69,8 +69,13 @@ merge (Loop p:rest)                          = Loop (merge p) : merge rest
 merge (x:xs)                                 = x : merge xs
 merge []                                     = []
 
+collapse :: Program -> Program
+collapse (Loop [Loop x]:rest) = collapse (Loop x:rest)
+collapse (x:xs)               = x : collapse xs
+collapse []                   = []
+
 compile :: String -> Either String Program
-compile = either Left (Right . merge) . parse
+compile = either Left (Right . collapse . merge) . parse
 
 exec :: Machine -> Instruction -> IO Machine
 exec m@(Machine idx mem) (AdjustCellPtr v)
