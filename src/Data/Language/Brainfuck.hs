@@ -24,6 +24,7 @@ data Instruction
     | PutChar
     | GetChar
     | Loop Program
+    | SetCell Int
     deriving (Show)
 
 type Program = [Instruction]
@@ -78,8 +79,16 @@ collapse (Loop [Loop x]:rest) = collapse (Loop x:rest)
 collapse (x:xs)               = x : collapse xs
 collapse []                   = []
 
+zeroCells :: Program -> Program
+zeroCells (Loop [AdjustCell v]:rest)
+    | v < 0     = SetCell 0 : zeroCells rest
+    | otherwise = Loop [AdjustCell v] : zeroCells rest
+zeroCells (Loop p:rest) = Loop (zeroCells p) : zeroCells rest
+zeroCells (x:xs)        = x : zeroCells xs
+zeroCells []            = []
+
 compile :: String -> Either String Program
-compile = either Left (Right . collapse . merge) . parse
+compile = either Left (Right . collapse . zeroCells . merge) . parse
 
 exec :: Machine -> Instruction -> IO Machine
 exec m@(Machine idx mem) (AdjustCellPtr v)
@@ -91,6 +100,7 @@ exec m@(Machine idx mem) (AdjustCellPtr v)
                 else throwIO AtStartOfMemory
     | otherwise = return m
 exec m (AdjustCell v) = getCell m >>= setCell m . (+v) >> return m
+exec m (SetCell v) = setCell m v >> return m
 exec m PutChar = getCell m >>= putChar . chr >> return m
 exec m GetChar = getChar >>= setCell m . ord >> return m
 exec m l@(Loop p) = do
