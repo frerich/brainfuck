@@ -63,11 +63,15 @@ parse s = case go [] (s ++ "]") of
     go _ []       = Left "missing ']'"
 
 merge :: Program -> Program
-merge (AdjustCell x:AdjustCell y:rest)       = merge (AdjustCell (x+y) : rest)
-merge (AdjustCellPtr x:AdjustCellPtr y:rest) = merge (AdjustCellPtr (x+y) : rest)
-merge (Loop p:rest)                          = Loop (merge p) : merge rest
-merge (x:xs)                                 = x : merge xs
-merge []                                     = []
+merge (AdjustCell x:AdjustCell y:rest)
+    | x + y /= 0 = merge (AdjustCell (x+y) : rest)
+    | otherwise  = merge rest
+merge (AdjustCellPtr x:AdjustCellPtr y:rest)
+    | x + y /= 0 = merge (AdjustCellPtr (x+y) : rest)
+    | otherwise  = merge rest
+merge (Loop p:rest) = Loop (merge p) : merge rest
+merge (x:xs)        = x : merge xs
+merge []            = []
 
 collapse :: Program -> Program
 collapse (Loop [Loop x]:rest) = collapse (Loop x:rest)
