@@ -93,10 +93,17 @@ fuseAssignAndAdjust (Loop p:rest)                 = Loop (fuseAssignAndAdjust p)
 fuseAssignAndAdjust (x:xs)                        = x : fuseAssignAndAdjust xs
 fuseAssignAndAdjust []                            = []
 
+fuseAssign :: Program -> Program
+fuseAssign (SetCell _:SetCell y:rest) = fuseAssign (SetCell y:rest)
+fuseAssign (Loop p:rest)              = Loop (fuseAssign p) : fuseAssign rest
+fuseAssign (x:xs)                     = x : fuseAssign xs
+fuseAssign []                         = []
+
 compile :: String -> Either String Program
 compile = either Left (Right . optimize) . parse
   where
     optimize = collapse
+             . fuseAssign
              . fuseAssignAndAdjust
              . zeroCells
              . merge
