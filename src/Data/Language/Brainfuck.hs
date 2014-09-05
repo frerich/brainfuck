@@ -30,6 +30,8 @@ data Instruction
 
 type Program = [Instruction]
 
+type Optimization = Program -> Program
+
 data InterpreterException
     = AtStartOfMemory
     | AtEndOfMemory
@@ -64,56 +66,56 @@ parse s = case go [] (s ++ "]") of
     go p (_  :xs) = go p xs
     go _ []       = Left "missing ']'"
 
-fuseAdjust :: Program -> Program
+fuseAdjust :: Optimization
 fuseAdjust = transformRecursively $ \case
     (AdjustCell x:AdjustCell y:xs) -> Just (AdjustCell (x+y):xs)
     _                              -> Nothing
 
-fuseMove :: Program -> Program
+fuseMove :: Optimization
 fuseMove = transformRecursively  $ \case
     (AdjustCellPtr x:AdjustCellPtr y:xs) -> Just (AdjustCellPtr (x+y):xs)
     _                                    -> Nothing
 
-dropNullAdjust :: Program -> Program
+dropNullAdjust :: Optimization
 dropNullAdjust = transformRecursively  $ \case
     (AdjustCell 0:xs) -> Just xs
     _                 -> Nothing
 
-dropNullMove :: Program -> Program
+dropNullMove :: Optimization
 dropNullMove = transformRecursively  $ \case
     (AdjustCellPtr 0:xs) -> Just xs
     _                    -> Nothing
 
-collapse :: Program -> Program
+collapse :: Optimization
 collapse = transform $ \case
     (Loop [Loop x]:xs) -> Just (Loop x:xs)
     _                  -> Nothing
 
-zeroCells :: Program -> Program
+zeroCells :: Optimization
 zeroCells = transform $ \case
     (Loop [AdjustCell v]:xs)
         | v < 0              -> Just (SetCell 0:xs)
         | otherwise          -> Nothing
     _                        -> Nothing
 
-fuseAssignAndAdjust :: Program -> Program
+fuseAssignAndAdjust :: Optimization
 fuseAssignAndAdjust = transformRecursively $ \case
     (SetCell x:AdjustCell y:xs) -> Just (SetCell (x+y):xs)
     _                           -> Nothing
 
-fuseAssign :: Program -> Program
+fuseAssign :: Optimization
 fuseAssign = transformRecursively $ \case
     (SetCell _:SetCell y:xs) -> Just (SetCell y:xs)
     _                        -> Nothing
 
-transform :: (Program -> Maybe Program) -> Program -> Program
+transform :: (Program -> Maybe Program) -> Optimization
 transform trans p@(x:xs) =
     case trans p of
         Just p' -> transform trans p'
         Nothing -> x : transform trans xs
 transform _ [] = []
 
-transformRecursively :: (Program -> Maybe Program) -> Program -> Program
+transformRecursively :: (Program -> Maybe Program) -> Optimization
 transformRecursively trans (Loop p:xs) = Loop (transformRecursively trans p):transformRecursively trans xs
 transformRecursively trans p@(x:xs) =
     case trans p of
