@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Data.Language.Brainfuck
     ( boot
@@ -64,40 +65,51 @@ parse s = case go [] (s ++ "]") of
     go _ []       = Left "missing ']'"
 
 merge :: Program -> Program
-merge (AdjustCell x:AdjustCell y:rest)
-    | x + y /= 0 = merge (AdjustCell (x+y) : rest)
-    | otherwise  = merge rest
-merge (AdjustCellPtr x:AdjustCellPtr y:rest)
-    | x + y /= 0 = merge (AdjustCellPtr (x+y) : rest)
-    | otherwise  = merge rest
-merge (Loop p:rest) = Loop (merge p) : merge rest
-merge (x:xs)        = x : merge xs
-merge []            = []
+merge = transformRecursively $ \case
+    (AdjustCell x:AdjustCell y:xs)
+        | x + y /= 0               -> Just (AdjustCell (x+y):xs)
+        | otherwise                -> Nothing
+    (AdjustCellPtr x:AdjustCellPtr y:xs)
+        | x + y /= 0               -> Just (AdjustCellPtr (x+y):xs)
+        | otherwise                -> Nothing
+    _                              -> Nothing
 
 collapse :: Program -> Program
-collapse (Loop [Loop x]:rest) = collapse (Loop x:rest)
-collapse (x:xs)               = x : collapse xs
-collapse []                   = []
+collapse = transform $ \case
+    (Loop [Loop x]:xs) -> Just (Loop x:xs)
+    _                  -> Nothing
 
 zeroCells :: Program -> Program
-zeroCells (Loop [AdjustCell v]:rest)
-    | v < 0     = SetCell 0 : zeroCells rest
-    | otherwise = Loop [AdjustCell v] : zeroCells rest
-zeroCells (Loop p:rest) = Loop (zeroCells p) : zeroCells rest
-zeroCells (x:xs)        = x : zeroCells xs
-zeroCells []            = []
+zeroCells = transform $ \case
+    (Loop [AdjustCell v]:xs)
+        | v < 0              -> Just (SetCell 0:xs)
+        | otherwise          -> Nothing
+    _                        -> Nothing
 
 fuseAssignAndAdjust :: Program -> Program
-fuseAssignAndAdjust (SetCell x:AdjustCell y:rest) = fuseAssignAndAdjust (SetCell (x+y) : rest)
-fuseAssignAndAdjust (Loop p:rest)                 = Loop (fuseAssignAndAdjust p) : fuseAssignAndAdjust rest
-fuseAssignAndAdjust (x:xs)                        = x : fuseAssignAndAdjust xs
-fuseAssignAndAdjust []                            = []
+fuseAssignAndAdjust = transformRecursively $ \case
+    (SetCell x:AdjustCell y:xs) -> Just (SetCell (x+y):xs)
+    _                           -> Nothing
 
 fuseAssign :: Program -> Program
-fuseAssign (SetCell _:SetCell y:rest) = fuseAssign (SetCell y:rest)
-fuseAssign (Loop p:rest)              = Loop (fuseAssign p) : fuseAssign rest
-fuseAssign (x:xs)                     = x : fuseAssign xs
-fuseAssign []                         = []
+fuseAssign = transformRecursively $ \case
+    (SetCell _:SetCell y:xs) -> Just (SetCell y:xs)
+    _                        -> Nothing
+
+transform :: (Program -> Maybe Program) -> Program -> Program
+transform trans p@(x:xs) =
+    case trans p of
+        Just p' -> transform trans p'
+        Nothing -> x : transform trans xs
+transform _ [] = []
+
+transformRecursively :: (Program -> Maybe Program) -> Program -> Program
+transformRecursively trans (Loop p:xs) = Loop (transformRecursively trans p):transformRecursively trans xs
+transformRecursively trans p@(x:xs) =
+    case trans p of
+        Just p' -> transformRecursively trans p'
+        Nothing -> x : transformRecursively trans xs
+transformRecursively _ [] = []
 
 compile :: String -> Either String Program
 compile = either Left (Right . optimize) . parse
