@@ -64,15 +64,25 @@ parse s = case go [] (s ++ "]") of
     go p (_  :xs) = go p xs
     go _ []       = Left "missing ']'"
 
-merge :: Program -> Program
-merge = transformRecursively $ \case
-    (AdjustCell x:AdjustCell y:xs)
-        | x + y /= 0               -> Just (AdjustCell (x+y):xs)
-        | otherwise                -> Nothing
-    (AdjustCellPtr x:AdjustCellPtr y:xs)
-        | x + y /= 0               -> Just (AdjustCellPtr (x+y):xs)
-        | otherwise                -> Nothing
+fuseAdjust :: Program -> Program
+fuseAdjust = transformRecursively $ \case
+    (AdjustCell x:AdjustCell y:xs) -> Just (AdjustCell (x+y):xs)
     _                              -> Nothing
+
+fuseMove :: Program -> Program
+fuseMove = transformRecursively  $ \case
+    (AdjustCellPtr x:AdjustCellPtr y:xs) -> Just (AdjustCellPtr (x+y):xs)
+    _                                    -> Nothing
+
+dropNullAdjust :: Program -> Program
+dropNullAdjust = transformRecursively  $ \case
+    (AdjustCell 0:xs) -> Just xs
+    _                 -> Nothing
+
+dropNullMove :: Program -> Program
+dropNullMove = transformRecursively  $ \case
+    (AdjustCellPtr 0:xs) -> Just xs
+    _                    -> Nothing
 
 collapse :: Program -> Program
 collapse = transform $ \case
@@ -118,7 +128,10 @@ compile = either Left (Right . optimize) . parse
              . fuseAssign
              . fuseAssignAndAdjust
              . zeroCells
-             . merge
+             . dropNullAdjust
+             . fuseAdjust
+             . dropNullMove
+             . fuseMove
 
 exec :: Machine -> Instruction -> IO Machine
 exec m@(Machine idx mem) (AdjustCellPtr v)
