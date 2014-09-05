@@ -25,4 +25,4 @@ main = do
                 (fn:_) -> readFile fn
     case compile code of
         Left errorMsg -> putStr errorMsg >> exitFailure
-        Right program -> execute program
+        Right program -> print program >> execute program
