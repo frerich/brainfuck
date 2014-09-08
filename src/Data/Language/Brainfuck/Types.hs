@@ -1,12 +1,12 @@
 module Data.Language.Brainfuck.Types where
 
 data Instruction
-    = AdjustCell Int
+    = AdjustCellAt Int Int
     | AdjustCellPtr Int
     | PutChar
     | GetChar
     | Loop Program
-    | SetCell Int
+    | SetCellAt Int Int
     deriving (Show)
 
 type Program = [Instruction]

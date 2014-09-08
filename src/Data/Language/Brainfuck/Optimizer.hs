@@ -31,8 +31,10 @@ optimize = fuseAssign
 
 fuseAdjust :: Optimization
 fuseAdjust = transformRecursively $ \case
-    (AdjustCell x:AdjustCell y:xs) -> Just (AdjustCell (x+y):xs)
-    _                              -> Nothing
+    (AdjustCellAt p x:AdjustCellAt q y:xs)
+        | p == q    -> Just (AdjustCellAt p (x+y):xs)
+        | otherwise -> Nothing
+    _               -> Nothing
 
 fuseMove :: Optimization
 fuseMove = transformRecursively  $ \case
@@ -41,8 +43,8 @@ fuseMove = transformRecursively  $ \case
 
 dropNullAdjust :: Optimization
 dropNullAdjust = transformRecursively  $ \case
-    (AdjustCell 0:xs) -> Just xs
-    _                 -> Nothing
+    (AdjustCellAt _ 0:xs) -> Just xs
+    _                     -> Nothing
 
 dropNullMove :: Optimization
 dropNullMove = transformRecursively  $ \case
@@ -56,20 +58,24 @@ collapse = transform $ \case
 
 zeroCells :: Optimization
 zeroCells = transform $ \case
-    (Loop [AdjustCell v]:xs)
-        | v < 0              -> Just (SetCell 0:xs)
-        | otherwise          -> Nothing
-    _                        -> Nothing
+    (Loop [AdjustCellAt 0 v]:xs)
+        | v < 0     -> Just (SetCellAt 0 0:xs)
+        | otherwise -> Nothing
+    _               -> Nothing
 
 fuseAssignAndAdjust :: Optimization
 fuseAssignAndAdjust = transformRecursively $ \case
-    (SetCell x:AdjustCell y:xs) -> Just (SetCell (x+y):xs)
-    _                           -> Nothing
+    (SetCellAt p x:AdjustCellAt q y:xs)
+        | p == q    -> Just (SetCellAt p (x+y):xs)
+        | otherwise -> Nothing
+    _               -> Nothing
 
 fuseAssign :: Optimization
 fuseAssign = transformRecursively $ \case
-    (SetCell _:SetCell y:xs) -> Just (SetCell y:xs)
-    _                        -> Nothing
+    (SetCellAt p _:SetCellAt q y:xs)
+        | p == q    -> Just (SetCellAt p y:xs)
+        | otherwise -> Nothing
+    _               -> Nothing
 
 transform :: (Program -> Maybe Program) -> Optimization
 transform trans p@(x:xs) =

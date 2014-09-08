@@ -41,8 +41,8 @@ exec m@(Machine idx mem) (AdjustCellPtr v)
                 then return (Machine (idx + v) mem)
                 else throwIO AtStartOfMemory
     | otherwise = return m
-exec m (AdjustCell v) = getCell m >>= setCell m . (+v) >> return m
-exec m (SetCell v) = setCell m v >> return m
+exec m (AdjustCellAt ofs v) = getCellAt ofs m >>= setCellAt ofs m . (+v) >> return m
+exec m (SetCellAt ofs v) = setCellAt ofs m v >> return m
 exec m PutChar = getCell m >>= putChar . chr >> return m
 exec m GetChar = getChar >>= setCell m . ord >> return m
 exec m l@(Loop p) = do
@@ -52,8 +52,14 @@ exec m l@(Loop p) = do
         else return m
 
 getCell :: Machine -> IO Int
-getCell (Machine idx mem) = MV.read mem idx
+getCell = getCellAt 0
+
+getCellAt :: Int -> Machine -> IO Int
+getCellAt offset (Machine idx mem) = MV.read mem (idx + offset)
 
 setCell:: Machine -> Int -> IO ()
-setCell (Machine idx mem) = MV.write mem idx
+setCell = setCellAt 0
+
+setCellAt :: Int -> Machine -> Int -> IO ()
+setCellAt offset (Machine idx mem) = MV.write mem (idx + offset)
 

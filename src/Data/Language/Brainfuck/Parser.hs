@@ -8,8 +8,8 @@ parse s = case go [] (s ++ "]") of
             Right (p, [])   -> Right (reverse p)
             Right (_, rest) -> Left ("unexpected input: " ++ rest)
   where
-    go p ('+':xs) = go (AdjustCell 1 : p) xs
-    go p ('-':xs) = go (AdjustCell (-1) : p) xs
+    go p ('+':xs) = go (AdjustCellAt 0 1 : p) xs
+    go p ('-':xs) = go (AdjustCellAt 0 (-1) : p) xs
     go p ('>':xs) = go (AdjustCellPtr 1 : p) xs
     go p ('<':xs) = go (AdjustCellPtr (-1) : p) xs
     go p ('.':xs) = go (PutChar : p) xs
