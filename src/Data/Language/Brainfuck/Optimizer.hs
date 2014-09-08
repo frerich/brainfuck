@@ -64,10 +64,8 @@ collapse = transform $ \case
 
 zeroCells :: Optimization
 zeroCells = transform $ \case
-    (Loop [AdjustCellAt 0 v]:xs)
-        | v < 0     -> Just (SetCellAt 0 0:xs)
-        | otherwise -> Nothing
-    _               -> Nothing
+    (Loop [AdjustCellAt 0 (-1)]:xs) -> Just (SetCellAt 0 0:xs)
+    _                               -> Nothing
 
 fuseAssignAndAdjust :: Optimization
 fuseAssignAndAdjust = transformRecursively $ \case
