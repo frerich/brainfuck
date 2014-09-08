@@ -13,20 +13,26 @@ module Data.Language.Brainfuck.Optimizer
 
     , collapse
     , zeroCells
+    , singleAccess
     ) where
 
 import Data.Language.Brainfuck.Types
 
+import Data.Function (on)
+import Data.List (sortBy, groupBy)
+import Data.Ord (comparing)
+
 type Optimization = Program -> Program
 
 optimize :: Optimization
-optimize = fuseAssign
+optimize = dropNullAdjust
+         . dropNullMove
+         . singleAccess
+         . fuseAssign
          . fuseAssignAndAdjust
          . zeroCells
          . collapse
-         . dropNullAdjust
          . fuseAdjust
-         . dropNullMove
          . fuseMove
 
 fuseAdjust :: Optimization
@@ -76,6 +82,32 @@ fuseAssign = transformRecursively $ \case
         | p == q    -> Just (SetCellAt p y:xs)
         | otherwise -> Nothing
     _               -> Nothing
+
+singleAccess :: Optimization
+singleAccess [] = []
+singleAccess (Loop p:rest) = Loop (singleAccess p) : singleAccess rest
+singleAccess program = if null fusableSection
+                       then head program : singleAccess (tail program)
+                       else fusedSection ++ singleAccess rest
+  where
+    (fusableSection, rest) = span isFusableInstruction program
+
+    fusedSection = fusedAdjustments ++ [AdjustCellPtr finalPos]
+
+    fusedAdjustments = map (\adj -> AdjustCellAt (fst (head adj)) (sum (map snd adj)))
+                     . groupBy ((==) `on` fst)
+                     . sortBy (comparing fst)
+                     $ adjustments
+
+    (finalPos, adjustments) = foldl go (0, []) fusableSection
+      where
+        go (pos, upd) (AdjustCellPtr v)  = (pos + v, upd)
+        go (pos, upd) (AdjustCellAt p v) = (pos, (pos + p, v):upd)
+        go _          _                  = error "isFusableInstruction wrong?"
+
+    isFusableInstruction (AdjustCellPtr _)  = True
+    isFusableInstruction (AdjustCellAt _ _) = True
+    isFusableInstruction _                  = False
 
 transform :: (Program -> Maybe Program) -> Optimization
 transform trans p@(x:xs) =
