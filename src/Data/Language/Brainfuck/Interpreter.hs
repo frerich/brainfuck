@@ -34,15 +34,15 @@ run = foldM exec
 
 exec :: Machine -> Instruction -> IO Machine
 exec m@(Machine idx mem) (AdjustCellPtr v)
-    | v > 0 = if idx + v < MV.length mem
-                then return (Machine (idx + v) mem)
-                else throwIO AtEndOfMemory
-    | v < 0 = if idx + v >= 0
-                then return (Machine (idx + v) mem)
-                else throwIO AtStartOfMemory
+    | v > 0 = updateIdxOrThrow (v + idx) (< MV.length mem) AtEndOfMemory
+    | v < 0 = updateIdxOrThrow (v + idx) (>= 0) AtStartOfMemory
     | otherwise = return m
-exec m (AdjustCellAt ofs v) = getCellAt ofs m >>= setCellAt ofs m . (+v) >> return m
-exec m (SetCellAt ofs v) = setCellAt ofs m v >> return m
+  where
+    updateIdxOrThrow idx' p exc = if p idx'
+                                    then return (Machine idx' mem)
+                                    else throwIO exc
+exec m (AdjustCellAt ofs v) = adjustCellAt ofs m (+v) >> return m
+exec m (SetCellAt ofs v) = adjustCellAt ofs m (const v) >> return m
 exec m PutChar = getCell m >>= putChar . chr >> return m
 exec m GetChar = getChar >>= setCell m . ord >> return m
 exec m l@(Loop p) = do
@@ -62,4 +62,7 @@ setCell = setCellAt 0
 
 setCellAt :: Int -> Machine -> Int -> IO ()
 setCellAt offset (Machine idx mem) = MV.write mem (idx + offset)
+
+adjustCellAt :: Int -> Machine -> (Int -> Int) ->  IO ()
+adjustCellAt offset m f = getCellAt offset m >>= setCellAt offset m . f
 
