@@ -7,7 +7,7 @@ data Instruction
     | GetChar
     | Loop Program
     | SetCellAt Int Int
-    deriving (Show)
+    deriving (Show, Eq)
 
 type Program = [Instruction]
 

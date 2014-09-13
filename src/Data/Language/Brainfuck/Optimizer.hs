@@ -25,65 +25,73 @@ import Data.Ord (comparing)
 type Optimization = Program -> Program
 
 optimize :: Optimization
-optimize = dropNullAdjust
-         . dropNullMove
-         . singleAccess
-         . fuseAssign
-         . fuseAssignAndAdjust
-         . zeroCells
-         . collapse
-         . fuseAdjust
-         . fuseMove
+optimize = foldr (.) id . map foldProgram $
+         [ multiplyLoops
+         , dropNullAdjust
+         , dropNullMove
+         , singleAccess
+         , fuseAssign
+         , fuseAssignAndAdjust
+         , zeroCells
+         , collapse
+         , fuseAdjust
+         , fuseMove
+         ]
 
 fuseAdjust :: Optimization
-fuseAdjust = transformRecursively $ \case
-    (AdjustCellAt p x:AdjustCellAt q y:xs)
-        | p == q    -> Just (AdjustCellAt p (x+y):xs)
-        | otherwise -> Nothing
-    _               -> Nothing
+fuseAdjust = foldr go []
+  where
+    go i@(AdjustCellAt p x) p'@(AdjustCellAt q y:is)
+        | p == q    = AdjustCellAt p (x+y) : is
+        | otherwise = i : p'
+    go i p'         = i : p'
 
 fuseMove :: Optimization
-fuseMove = transformRecursively  $ \case
-    (AdjustCellPtr x:AdjustCellPtr y:xs) -> Just (AdjustCellPtr (x+y):xs)
-    _                                    -> Nothing
+fuseMove = foldr go []
+  where
+    go (AdjustCellPtr x) (AdjustCellPtr y:is) = AdjustCellPtr (x+y) : is
+    go i p'                                   = i : p'
 
 dropNullAdjust :: Optimization
-dropNullAdjust = transformRecursively  $ \case
-    (AdjustCellAt _ 0:xs) -> Just xs
-    _                     -> Nothing
+dropNullAdjust = filter (not . nullAdjust)
+  where
+    nullAdjust (AdjustCellAt _ 0) = True
+    nullAdjust _                  = False
 
 dropNullMove :: Optimization
-dropNullMove = transformRecursively  $ \case
-    (AdjustCellPtr 0:xs) -> Just xs
-    _                    -> Nothing
+dropNullMove = filter (not . nullMove)
+  where
+    nullMove (AdjustCellPtr 0) = True
+    nullMove _                 = False
 
 collapse :: Optimization
-collapse = transform $ \case
-    (Loop [Loop x]:xs) -> Just (Loop x:xs)
-    _                  -> Nothing
+collapse = map $ \case
+    Loop [Loop p] -> Loop p
+    x             -> x
 
 zeroCells :: Optimization
-zeroCells = transform $ \case
-    (Loop [AdjustCellAt 0 (-1)]:xs) -> Just (SetCellAt 0 0:xs)
-    _                               -> Nothing
+zeroCells = map $ \case
+    Loop [AdjustCellAt 0 (-1)] -> SetCellAt 0 0
+    x                          -> x
 
 fuseAssignAndAdjust :: Optimization
-fuseAssignAndAdjust = transformRecursively $ \case
-    (SetCellAt p x:AdjustCellAt q y:xs)
-        | p == q    -> Just (SetCellAt p (x+y):xs)
-        | otherwise -> Nothing
-    _               -> Nothing
+fuseAssignAndAdjust = foldr go []
+  where
+    go i@(SetCellAt p x) p'@(AdjustCellAt q y:is)
+        | p == q    = SetCellAt p (x+y) : is
+        | otherwise = i : p'
+    go i p'         = i : p'
 
 fuseAssign :: Optimization
-fuseAssign = transformRecursively $ \case
-    (SetCellAt p _:SetCellAt q y:xs)
-        | p == q    -> Just (SetCellAt p y:xs)
-        | otherwise -> Nothing
-    _               -> Nothing
+fuseAssign = foldr go []
+  where
+    go i@(SetCellAt p _) p'@(SetCellAt q _:_)
+        | p == q    = p'
+        | otherwise = i : p'
+    go i p'         = i : p'
 
 singleAccess :: Optimization
 singleAccess [] = []
-singleAccess (Loop p:rest) = Loop (singleAccess p) : singleAccess rest
 singleAccess program = if null fusableSection
                        then head program : singleAccess (tail program)
                        else fusedSection ++ singleAccess rest
@@ -107,18 +115,9 @@ singleAccess program = if null fusableSection
     isFusableInstruction (AdjustCellAt _ _) = True
     isFusableInstruction _                  = False
 
-transform :: (Program -> Maybe Program) -> Optimization
-transform trans p@(x:xs) =
-    case trans p of
-        Just p' -> transform trans p'
-        Nothing -> x : transform trans xs
-transform _ [] = []
-
-transformRecursively :: (Program -> Maybe Program) -> Optimization
-transformRecursively trans (Loop p:xs) = Loop (transformRecursively trans p):transformRecursively trans xs
-transformRecursively trans p@(x:xs) =
-    case trans p of
-        Just p' -> transformRecursively trans p'
-        Nothing -> x : transformRecursively trans xs
-transformRecursively _ [] = []
+foldProgram :: (Program -> Program) -> Program -> Program
+foldProgram f = f . foldr go []
+  where
+    go (Loop x) p' = Loop (foldProgram f x) : p'
+    go x        p' = x : p'
 
