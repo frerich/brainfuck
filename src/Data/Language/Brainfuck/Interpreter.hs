@@ -10,7 +10,7 @@ where
 
 import Data.Language.Brainfuck.Types
 
-import qualified Data.Vector.Mutable as MV
+import qualified Data.Vector.Unboxed.Mutable as MV
 import Control.Exception (throwIO, Exception)
 import Control.Monad (foldM)
 import Data.Char (ord, chr)
