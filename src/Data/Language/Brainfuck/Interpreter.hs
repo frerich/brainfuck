@@ -43,22 +43,16 @@ exec m@(Machine idx mem) (AdjustCellPtr v)
                                     else throwIO exc
 exec m (AdjustCellAt ofs v) = adjustCellAt ofs m (+v) >> return m
 exec m (SetCellAt ofs v) = adjustCellAt ofs m (const v) >> return m
-exec m PutChar = getCell m >>= putChar . chr >> return m
-exec m GetChar = getChar >>= setCell m . ord >> return m
+exec m PutChar = getCellAt 0 m >>= putChar . chr >> return m
+exec m GetChar = getChar >>= setCellAt 0 m . ord >> return m
 exec m l@(Loop p) = do
-    curVal <- getCell m
+    curVal <- getCellAt 0 m
     if curVal /= 0
         then run m p >>= \m' -> exec m' l
         else return m
 
-getCell :: Machine -> IO Int
-getCell = getCellAt 0
-
 getCellAt :: Int -> Machine -> IO Int
 getCellAt offset (Machine idx mem) = MV.read mem (idx + offset)
-
-setCell:: Machine -> Int -> IO ()
-setCell = setCellAt 0
 
 setCellAt :: Int -> Machine -> Int -> IO ()
 setCellAt offset (Machine idx mem) = MV.write mem (idx + offset)
