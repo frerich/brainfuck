@@ -26,8 +26,7 @@ type Optimization = Program -> Program
 
 optimize :: Optimization
 optimize = foldr (.) id . map foldProgram $
-         [ multiplyLoops
-         , dropNullAdjust
+         [ dropNullAdjust
          , dropNullMove
          , singleAccess
          , fuseAssign
