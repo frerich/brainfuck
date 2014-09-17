@@ -28,6 +28,11 @@ instance Exception InterpreterException
 boot :: Int -> IO Machine
 boot memSize = Machine 0 <$> MV.replicate memSize 0
 
+{-
+   Do not use foldM here (contrary to what e.g. hlint suggests):
+   it greatly slows down the code. Maybe due to the fact that it
+   (at the time of this writing) is not inlined?
+-}
 run :: Machine -> Program -> IO Machine
 run m (i:is) = exec m i >>= \m' -> run m' is
 run m []     = return m
