@@ -12,7 +12,6 @@ import Data.Language.Brainfuck.Types
 
 import qualified Data.Vector.Unboxed.Mutable as MV
 import Control.Exception (throwIO, Exception)
-import Control.Monad (foldM)
 import Data.Char (ord, chr)
 import Data.Functor ((<$>))
 import Data.Typeable (Typeable)
@@ -30,7 +29,8 @@ boot :: Int -> IO Machine
 boot memSize = Machine 0 <$> MV.replicate memSize 0
 
 run :: Machine -> Program -> IO Machine
-run = foldM exec
+run m (i:is) = exec m i >>= \m' -> run m' is
+run m []     = return m
 
 exec :: Machine -> Instruction -> IO Machine
 exec m@(Machine idx mem) (AdjustCellPtr v)
