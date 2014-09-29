@@ -15,6 +15,6 @@ import Data.Language.Brainfuck.Parser
 import Data.Language.Brainfuck.Types
 
 compile :: String -> Either String Program
-compile = either Left (Right . optimize) . parse
+compile = fmap optimize . parse
 
 
