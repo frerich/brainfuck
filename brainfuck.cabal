@@ -17,10 +17,21 @@ source-repository head
     type:       git
     location:   http://github.com/frerich/brainfuck
 
+library
+  exposed-modules:     Data.Language.Brainfuck
+  other-modules: Data.Language.Brainfuck.Interpreter
+               , Data.Language.Brainfuck.Optimizer
+               , Data.Language.Brainfuck.Parser
+               , Data.Language.Brainfuck.Types
+  build-depends:       base >=4.6 && <4.11, vector >=0.10 && <0.13
+  default-language:    Haskell2010
+  hs-source-dirs:      src/lib
+  ghc-options:         -Wall
+
 executable brainfuck
   main-is:             Main.hs
   other-extensions:    DeriveDataTypeable
-  build-depends:       base >=4.6 && <4.8, vector >=0.10 && <0.11
-  hs-source-dirs:      src
+  build-depends:       base >=4.6 && <4.11, vector >=0.10 && <0.13, brainfuck
+  hs-source-dirs:      src/interp
   default-language:    Haskell2010
   ghc-options:         -Wall
